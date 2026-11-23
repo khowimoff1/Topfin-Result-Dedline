@@ -6,6 +6,7 @@ import MembersModal from "./components/MembersModal.jsx";
 import ListView from "./components/ListView.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import UsersModal from "./components/UsersModal.jsx";
+import TelegramModal from "./components/TelegramModal.jsx";
 import { LOGO_URL, daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
 import { toISODate } from "../shared/board.js";
 
@@ -29,6 +30,7 @@ export default function App() {
   const [editing, setEditing] = useState(null); // {task?, assigneeId?}
   const [membersOpen, setMembersOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
+  const [telegramOpen, setTelegramOpen] = useState(false);
   const [access, setAccess] = useState({ users: [], log: [] }); // faqat admin uchun
   const [logoutNotice, setLogoutNotice] = useState("");
 
@@ -52,12 +54,15 @@ export default function App() {
     setEditing(null);
     setMembersOpen(false);
     setUsersOpen(false);
+    setTelegramOpen(false);
     setAccess({ users: [], log: [] });
     setLogoutNotice(reason);
   }, []);
 
   // Kalit eskirsa yoki parol o'zgarsa — kirish sahifasiga qaytamiz
-  useEffect(() => api.setUnauthorizedHandler(logout), [logout]);
+  useEffect(() => {
+    api.setUnauthorizedHandler(logout);
+  }, [logout]);
 
   useEffect(() => {
     if (!session) return;
@@ -188,6 +193,9 @@ export default function App() {
                 🔐 Foydalanuvchilar
                 {pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}
               </button>
+              <button className="btn" onClick={() => setTelegramOpen(true)}>
+                📨 Telegram
+              </button>
               <button className="btn" onClick={() => setMembersOpen(true)}>
                 👥 Xodimlar
               </button>
@@ -289,6 +297,7 @@ export default function App() {
           onClose={() => setEditing(null)}
         />
       )}
+      {telegramOpen && canEdit && <TelegramModal onClose={() => setTelegramOpen(false)} onToast={setToast} />}
       {usersOpen && canEdit && (
         <UsersModal
           access={access}

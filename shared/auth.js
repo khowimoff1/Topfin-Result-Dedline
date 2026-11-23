@@ -17,6 +17,7 @@ let cachedSecret = null;
  *   ADMIN_LOGIN, ADMIN_PASSWORD — admin
  *   GOOGLE_CLIENT_ID            — boshqalar Google orqali kiradi
  *   SESSION_SECRET              — kalitlarni imzolash uchun maxfiy matn
+ *   TELEGRAM_BOT_TOKEN          — Telegram bot (ixtiyoriy)
  */
 export function authConfigFromEnv(env) {
   const admin = { login: (env.ADMIN_LOGIN || "boshliq").trim(), password: env.ADMIN_PASSWORD || "" };
@@ -26,7 +27,12 @@ export function authConfigFromEnv(env) {
     cachedSecret = scryptSync(key, "deadline-nazorati", 32);
     cachedKey = key;
   }
-  return { admin, secret: cachedSecret, googleClientId: (env.GOOGLE_CLIENT_ID || "").trim() };
+  return {
+    admin,
+    secret: cachedSecret,
+    googleClientId: (env.GOOGLE_CLIENT_ID || "").trim(),
+    telegramToken: (env.TELEGRAM_BOT_TOKEN || "").trim(),
+  };
 }
 
 // ---------- Kalit (token) ----------

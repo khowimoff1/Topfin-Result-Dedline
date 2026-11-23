@@ -12,6 +12,9 @@ const LOG_LABELS = {
   visit: ["👁", "Saytni ochdi"],
   admin_login: ["👑", "Admin kirdi"],
   failed: ["⚠️", "Noto'g'ri parol bilan urinish"],
+  tg_link: ["🔗", "Telegram botga ulandi"],
+  tg_doing: ["▶️", "Telegram'da vazifani boshladi"],
+  tg_done: ["✅", "Telegram'da vazifani bajardi"],
 };
 
 const STATUS_LABELS = {
@@ -185,6 +188,7 @@ export default function UsersModal({ access, onStatus, onRemove, onClose }) {
                           </td>
                           <td>
                             {icon} {label}
+                            {e.detail && <div className="muted small">{e.detail}</div>}
                           </td>
                         </tr>
                       );

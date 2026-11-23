@@ -254,3 +254,15 @@ code { background: rgba(0, 0, 0, 0.06); padding: 1px 5px; border-radius: 4px; fo
 @media (max-width: 600px) {
   .brand-logo { width: 74px; height: 36px; }
 }
+
+/* ---------- Telegram oynasi ---------- */
+.text-ok { color: var(--later); }
+.tg-section { display: grid; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.tg-section:last-child { border-bottom: none; padding-bottom: 0; }
+.tg-section h3 { font-size: 15px; margin: 0; }
+.tg-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tg-row .user-info { min-width: 200px; }
+.tg-linked { display: flex; align-items: center; gap: 6px; }
+.tg-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.danger-link { color: var(--overdue); font-size: 13px; padding: 0 4px; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }

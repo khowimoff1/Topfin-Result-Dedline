@@ -79,3 +79,10 @@ export const saveMembers = (members) => post("members", { members }, "PUT");
 export const fetchAccess = () => request("users");
 export const setUserStatus = (email, status) => post(`users/${enc(email)}`, { status }, "PUT");
 export const removeUser = (email) => request(`users/${enc(email)}`, { method: "DELETE" });
+
+// ---------- Telegram bot (faqat admin) ----------
+
+export const fetchTelegram = () => request("telegram");
+export const setupTelegram = () => post("telegram/setup", {});
+export const unlinkTelegram = (target) => post("telegram/unlink", target);
+export const sendReminderNow = () => post("telegram/remind", {});

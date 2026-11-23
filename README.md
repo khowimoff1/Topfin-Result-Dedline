@@ -13,6 +13,12 @@ Jamoa (4 xodim) uchun vazifalar va deadline'lar shabloni.
   - **Zayavkalar** — qabul qilish / rad etish
   - **Foydalanuvchilar** — kimga ruxsat bor, oxirgi faollik, ruxsatni to'xtatish
   - **Kirishlar tarixi** — kim, qachon kirdi, saytni ochdi, zayavka yubordi; noto'g'ri parol bilan urinishlar ham yoziladi
+- **📨 Telegram bot:**
+  - xodimga yangi vazifa belgilansa, deadline o'zgarsa, vazifa o'tkazilsa yoki bekor qilinsa — xabar
+  - xabardagi tugmalar: **▶️ Boshladim**, **✅ Bajarildi** — saytdagi holat ham o'zgaradi, admin'ga xabar boradi
+  - har kuni soat **9:00** da — kechikkan, bugungi va ertangi vazifalar haqida eslatma (admin'ga — umumiy holat)
+  - saytga yangi zayavka kelsa — admin'ga **Qabul qilish / Rad etish** tugmalari bilan xabar
+  - buyruqlar: `/vazifalar`, `/bugun`, `/hammasi` (admin)
 - Har bir xodim uchun alohida ustun, bajarilish foizi
 - Deadline'gacha qolgan kun: **qizil** (kechikkan), **to'q sariq** (bugun), **sariq** (1–3 kun), **ko'k** (bir hafta ichida), **yashil**
 - Statistika: faol, muddati o'tgan, 3 kun ichida, bajarilgan
@@ -67,6 +73,20 @@ Google'dan bepul **Client ID** olish kerak (5 daqiqalik ish):
 
 > Client **Secret** kerak emas — faqat Client ID.
 
+## Telegram bot
+
+1. Telegram'da **@BotFather** ga yozing → `/newbot` → bot nomi (masalan `Topfin Deadline`) va username (oxiri `bot` bilan tugashi kerak, masalan `topfin_deadline_bot`).
+2. BotFather bergan **token**ni (`123456789:AAH...`) Netlify'da **`TELEGRAM_BOT_TOKEN`** o'zgaruvchisiga yozing → **Trigger deploy**.
+3. Saytga admin bo'lib kiring → **📨 Telegram** tugmasi:
+   - **Botni saytga ulash** — bir marta bosiladi (bot xabarlarini saytga ulaydi)
+   - **Telegram'da ulash** (Admin bo'limi) — o'zingizni ulang: zayavkalar va hisobotlar sizga keladi
+   - har bir xodim yonidagi **🔗 Havolani nusxalash** — havolani o'sha xodimga Telegram'da yuboring. U bosib **Start** ni bossa — ulanadi
+4. Tekshirish: xodimga vazifa qo'shing — unga botdan xabar kelishi kerak. **☀️ Eslatmani hozir yuborish** bilan ertalabki xabarni ham sinab ko'rishingiz mumkin.
+
+> Bot faqat Netlify'dagi saytda to'liq ishlaydi (Telegram kompyuteringizdagi `localhost`ga ulana olmaydi).
+> Ertalabki eslatma Netlify Scheduled Functions orqali yuboriladi (`netlify/functions/daily-reminder.mjs`, 04:00 UTC = 09:00 Toshkent).
+> Token maxfiy: uni hech kimga bermang. Tasodifan oshkor bo'lsa — @BotFather → `/revoke` bilan yangilang.
+
 ## Netlifyga joylash
 
 ### 1-qadam: sozlamalar (majburiy!)
@@ -79,6 +99,7 @@ Google'dan bepul **Client ID** olish kerak (5 daqiqalik ish):
 | `ADMIN_LOGIN` | boshliq logini (yozmasangiz: `boshliq`) |
 | `ADMIN_PASSWORD` | boshliq paroli |
 | `GOOGLE_CLIENT_ID` | Google'dan olingan Client ID (yuqoriga qarang) |
+| `TELEGRAM_BOT_TOKEN` | @BotFather bergan token (ixtiyoriy, bot uchun) |
 | `SESSION_SECRET` | uzun tasodifiy matn (30+ belgi) |
 
 Qo'shgandan yoki o'zgartirgandan keyin **Deploys → Trigger deploy** bosing. Boshliq paroli o'zgarsa, hamma (Google orqali kirganlar ham) qaytadan kirishi kerak bo'ladi.
@@ -108,7 +129,10 @@ start.bat                   — kompyuterda ishga tushirish (ikki marta bosing)
 netlify/functions/api.mjs   — Netlify'dagi backend (Netlify Blobs'da saqlaydi)
 vite.config.js              — kompyuterdagi backend (data/*.json'da saqlaydi)
 shared/handler.js           — API: vazifalar, zayavkalar, kirishlar tarixi (ikkalasi uchun umumiy)
-shared/auth.js              — boshliq paroli, kirish kaliti, Google tokenini tekshirish
+shared/auth.js              — admin paroli, kirish kaliti, Google tokenini tekshirish
+shared/telegram.js          — Telegram bot: xabarlar, tugmalar, buyruqlar, ertalabki eslatma
+shared/store.js             — saqlangan ma'lumotlar bilan ishlash yordamchilari
+netlify/functions/daily-reminder.mjs — har kuni 9:00 dagi eslatma (cron)
 shared/board.js             — vazifalar qoidalari va tekshiruvi
 src/App.jsx                 — asosiy sahifa
 src/components/             — kartochka, oynalar, ro'yxat, kirish sahifasi, foydalanuvchilar paneli

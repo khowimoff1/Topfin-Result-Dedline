@@ -3,19 +3,30 @@
 //  - Kompyuterda:  vite.config.js → npm start (saqlash: data/*.json)
 //
 // storage — { get(key): Promise<any|null>, set(key, value): Promise<void> }
-//   kalitlar: "board" (vazifalar), "users" (Google foydalanuvchilar), "log" (kirishlar tarixi)
+//   kalitlar: "board" (vazifalar), "users" (Google foydalanuvchilar), "log" (kirishlar tarixi),
+//             "telegram" (bot ulanishlari)
 // auth    — authConfigFromEnv(...) natijasi
 //
 // Rollar:
 //  - admin  (login + parol)                     — hammasini ko'radi va o'zgartiradi
 //  - viewer (boshqalar, Google orqali, ruxsat bilan) — faqat ko'radi
 import { TOKEN_DAYS, readToken, safeEqual, signToken, verifyGoogleIdToken } from "./auth.js";
-import { BoardError, addTask, createDefaultBoard, deleteTask, setMembers, updateTask } from "./board.js";
+import { BoardError, addTask, deleteTask, setMembers, updateTask } from "./board.js";
+import { USER_STATUSES, addLog, changeUserStatus, loadBoard, loadUsers, nowIso } from "./store.js";
+import {
+  handleTelegramUpdate,
+  makeTelegram,
+  notifyAccessRequest,
+  notifyTaskChange,
+  sendDailyReminders,
+  setupWebhook,
+  telegramStatus,
+  unlinkTelegram,
+  webhookSecret,
+} from "./telegram.js";
 
-const LOG_LIMIT = 1000; // jurnalda saqlanadigan oxirgi yozuvlar soni
 const SEEN_EVERY_MS = 5 * 60 * 1000; // "oxirgi faollik"ni 5 daqiqada bir yangilaymiz
 const VISIT_GAP_MS = 30 * 60 * 1000; // 30 daqiqadan ko'p tanaffusdan keyin qayta kirish — jurnalga "ochdi"
-const USER_STATUSES = ["approved", "rejected", "blocked"];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -24,7 +35,6 @@ const json = (data, status = 200) =>
   });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const nowIso = () => new Date().toISOString();
 const expiry = () => Date.now() + TOKEN_DAYS * 86_400_000;
 
 async function readBody(req) {
@@ -33,14 +43,6 @@ async function readBody(req) {
   } catch {
     throw new BoardError("Noto'g'ri so'rov");
   }
-}
-
-const loadUsers = async (storage) => (await storage.get("users")) ?? [];
-
-async function addLog(storage, entry) {
-  const log = (await storage.get("log")) ?? [];
-  log.unshift({ at: nowIso(), ...entry });
-  await storage.set("log", log.slice(0, LOG_LIMIT));
 }
 
 async function accessData(storage) {
@@ -53,12 +55,25 @@ export async function handleApi(req, storage, auth, options = {}) {
   const id = rawId && decodeURIComponent(rawId);
   const method = req.method;
   if (rest.length) return json({ error: "Topilmadi" }, 404);
+  const tg = makeTelegram(auth, options.fetch); // bot ulanmagan bo'lsa null
 
   try {
     // ---------- Ochiq manzillar (kirishsiz) ----------
 
     if (resource === "config" && method === "GET" && !id) {
       return json({ googleClientId: auth.googleClientId || null });
+    }
+
+    // Telegram bot xabarlari (Telegram serveridan keladi, maxfiy kalit bilan tekshiriladi)
+    if (resource === "telegram" && id === "webhook" && method === "POST") {
+      const given = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+      if (!tg || !safeEqual(given, webhookSecret(tg.secret))) return json({ error: "Ruxsat yo'q" }, 403);
+      try {
+        await handleTelegramUpdate(tg, storage, (await readBody(req)) ?? {});
+      } catch (err) {
+        console.error("Telegram webhook:", err); // Telegram qayta-qayta yubormasligi uchun baribir 200 qaytaramiz
+      }
+      return json({ ok: true });
     }
 
     // Admin: login + parol
@@ -90,6 +105,7 @@ export async function handleApi(req, storage, auth, options = {}) {
         users.push(user);
         await storage.set("users", users);
         await addLog(storage, { type: "request", email: user.email, name: user.name });
+        await notifyAccessRequest(tg, storage, user);
         return json({ status: "pending" });
       }
       if (user.status !== "approved") return json({ status: user.status }); // pending | rejected | blocked
@@ -142,10 +158,7 @@ export async function handleApi(req, storage, auth, options = {}) {
       if (method === "PUT") {
         const status = (await readBody(req))?.status;
         if (!USER_STATUSES.includes(status)) throw new BoardError("Noto'g'ri holat");
-        user.status = status;
-        user.decidedAt = nowIso();
-        await storage.set("users", users);
-        await addLog(storage, { type: status, email: user.email, name: user.name });
+        await changeUserStatus(storage, user.email, status);
       } else if (method === "DELETE") {
         users.splice(index, 1);
         await storage.set("users", users);
@@ -158,10 +171,26 @@ export async function handleApi(req, storage, auth, options = {}) {
 
     // ---------- Vazifalar ----------
 
-    let board = await storage.get("board");
-    if (!board) {
-      board = createDefaultBoard();
-      await storage.set("board", board);
+    const board = await loadBoard(storage);
+
+    // ---------- Telegram bot sozlamalari (faqat admin) ----------
+
+    if (resource === "telegram") {
+      if (session.role !== "admin") return json({ error: "Faqat admin uchun" }, 403);
+      const origin = new URL(req.url).origin;
+      if (method === "GET" && !id) return json(await telegramStatus(tg, storage, board, origin));
+      if (!tg) throw new BoardError("Bot ulanmagan: TELEGRAM_BOT_TOKEN ni kiriting");
+      if (method === "POST" && id === "setup") {
+        await setupWebhook(tg, storage, origin);
+        return json(await telegramStatus(tg, storage, board, origin));
+      }
+      if (method === "POST" && id === "unlink") {
+        const body = (await readBody(req)) ?? {};
+        await unlinkTelegram(storage, { memberId: body.memberId, adminChatId: body.adminChatId });
+        return json(await telegramStatus(tg, storage, board, origin));
+      }
+      if (method === "POST" && id === "remind") return json(await sendDailyReminders(tg, storage));
+      return json({ error: "Topilmadi" }, 404);
     }
 
     if (method === "GET" && resource === "board" && !id) return json(board);
@@ -179,6 +208,14 @@ export async function handleApi(req, storage, auth, options = {}) {
     else next = setMembers(board, (await readBody(req))?.members);
 
     await storage.set("board", next);
+
+    // Xodimga Telegram orqali xabar (bot ulangan bo'lsa)
+    if (resource === "tasks") {
+      const oldIds = new Set(board.tasks.map((t) => t.id));
+      const before = id ? board.tasks.find((t) => t.id === id) ?? null : null;
+      const after = id ? next.tasks.find((t) => t.id === id) ?? null : next.tasks.find((t) => !oldIds.has(t.id)) ?? null;
+      await notifyTaskChange(tg, storage, next, before, after);
+    }
     return json(next);
   } catch (err) {
     if (err instanceof BoardError) return json({ error: err.message }, err.status);
