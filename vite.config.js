@@ -3,32 +3,33 @@ import react from "@vitejs/plugin-react";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { authConfigFromEnv, handleApi } from "./shared/handler.js";
+import { authConfigFromEnv } from "./shared/auth.js";
+import { handleApi } from "./shared/handler.js";
 
 // Kompyuterda (npm start / npm run dev) backend shu yerda ishlaydi:
-// ma'lumotlar data/board.json faylida saqlanadi. Netlify'da esa
-// netlify/functions/api.mjs ishlaydi — kod bir xil (shared/handler.js).
+// ma'lumotlar data/ papkasida saqlanadi (board.json, users.json, log.json).
+// Netlify'da esa netlify/functions/api.mjs ishlaydi — kod bir xil (shared/handler.js).
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const DATA_FILE = join(ROOT, "data", "board.json");
+const DATA_DIR = join(ROOT, "data");
 
 const fileStorage = {
-  async get() {
+  async get(key) {
     try {
-      return JSON.parse(await readFile(DATA_FILE, "utf8"));
+      return JSON.parse(await readFile(join(DATA_DIR, `${key}.json`), "utf8"));
     } catch (err) {
       if (err.code === "ENOENT") return null;
       throw err;
     }
   },
-  async set(board) {
-    await mkdir(dirname(DATA_FILE), { recursive: true });
-    const tmp = `${DATA_FILE}.tmp`;
-    await writeFile(tmp, JSON.stringify(board, null, 2));
-    await rename(tmp, DATA_FILE);
+  async set(key, value) {
+    await mkdir(DATA_DIR, { recursive: true });
+    const file = join(DATA_DIR, `${key}.json`);
+    await writeFile(`${file}.tmp`, JSON.stringify(value, null, 2));
+    await rename(`${file}.tmp`, file);
   },
 };
 
-// Parollar .env faylidan o'qiladi (ADMIN_PASSWORD, VIEWER_PASSWORD ...)
+// Parol va GOOGLE_CLIENT_ID .env faylidan o'qiladi
 function localApi(env) {
   const auth = authConfigFromEnv(env);
   let queue = Promise.resolve(); // so'rovlarni navbat bilan bajaramiz (fayl buzilmasligi uchun)

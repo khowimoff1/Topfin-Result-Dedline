@@ -15,10 +15,18 @@ let onUnauthorized = () => {};
 export const getSession = () => session;
 export const setUnauthorizedHandler = (fn) => (onUnauthorized = fn);
 
+function saveSession(data) {
+  session = { role: data.role, token: data.token, name: data.name, email: data.email ?? "", picture: data.picture ?? "" };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
 export function logout() {
   session = null;
   localStorage.removeItem(SESSION_KEY);
 }
+
+const PUBLIC_PATHS = ["login", "google", "config"];
 
 async function request(path, options = {}) {
   const headers = { "content-type": "application/json" };
@@ -31,31 +39,43 @@ async function request(path, options = {}) {
   }
   if (!data) throw new Error("Server javob bermadi. Saytni start.bat orqali yoki Netlify'da oching.");
 
-  if (res.status === 401 && path !== "login") {
+  if (res.status === 401 && !PUBLIC_PATHS.includes(path)) {
     logout();
-    onUnauthorized();
+    onUnauthorized(data.error);
   }
   if (!res.ok) throw new Error(data.error || "Xatolik yuz berdi");
   return data;
 }
 
+const post = (path, body, method = "POST") => request(path, { method, body: JSON.stringify(body) });
+const enc = encodeURIComponent;
+
+// ---------- Kirish ----------
+
+export const getConfig = () => request("config");
+
+/** Boshliq: login + parol */
 export async function login(loginName, password) {
-  const data = await request("login", {
-    method: "POST",
-    body: JSON.stringify({ login: loginName, password }),
-  });
-  session = { role: data.role, token: data.token };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
+  return saveSession(await post("login", { login: loginName, password }));
 }
 
+/** Boshqalar: Google. Javob: { status: "approved" | "pending" | "rejected" | "blocked" } */
+export async function googleLogin(credential) {
+  const data = await post("google", { credential });
+  if (data.status === "approved") saveSession(data);
+  return data;
+}
+
+// ---------- Vazifalar ----------
+
 export const fetchBoard = () => request("board");
+export const createTask = (task) => post("tasks", task);
+export const updateTask = (id, task) => post(`tasks/${enc(id)}`, task, "PUT");
+export const deleteTask = (id) => request(`tasks/${enc(id)}`, { method: "DELETE" });
+export const saveMembers = (members) => post("members", { members }, "PUT");
 
-export const createTask = (task) => request("tasks", { method: "POST", body: JSON.stringify(task) });
+// ---------- Foydalanuvchilar va tarix (faqat boshliq) ----------
 
-export const updateTask = (id, task) =>
-  request(`tasks/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(task) });
-
-export const deleteTask = (id) => request(`tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
-
-export const saveMembers = (members) => request("members", { method: "PUT", body: JSON.stringify({ members }) });
+export const fetchAccess = () => request("users");
+export const setUserStatus = (email, status) => post(`users/${enc(email)}`, { status }, "PUT");
+export const removeUser = (email) => request(`users/${enc(email)}`, { method: "DELETE" });

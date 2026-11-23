@@ -1,16 +1,21 @@
 // API so'rovlarini qayta ishlash. Bir xil kod ikki joyda ishlaydi:
 //  - Netlify'da:   netlify/functions/api.mjs  (saqlash: Netlify Blobs)
-//  - Kompyuterda:  vite.config.js → npm start (saqlash: data/board.json)
-// `storage` — { get(): Promise<board|null>, set(board): Promise<void> }
-// `auth`    — authConfigFromEnv(...) natijasi
+//  - Kompyuterda:  vite.config.js → npm start (saqlash: data/*.json)
+//
+// storage — { get(key): Promise<any|null>, set(key, value): Promise<void> }
+//   kalitlar: "board" (vazifalar), "users" (Google foydalanuvchilar), "log" (kirishlar tarixi)
+// auth    — authConfigFromEnv(...) natijasi
 //
 // Rollar:
-//  - admin  (boshliq)    — ko'radi va o'zgartiradi
-//  - viewer (kuzatuvchi) — faqat ko'radi
-import { createHash, createHmac, scryptSync, timingSafeEqual } from "node:crypto";
+//  - admin  (boshliq, login + parol)            — hammasini ko'radi va o'zgartiradi
+//  - viewer (boshqalar, Google orqali, ruxsat bilan) — faqat ko'radi
+import { TOKEN_DAYS, readToken, safeEqual, signToken, verifyGoogleIdToken } from "./auth.js";
 import { BoardError, addTask, createDefaultBoard, deleteTask, setMembers, updateTask } from "./board.js";
 
-const TOKEN_DAYS = 30;
+const LOG_LIMIT = 1000; // jurnalda saqlanadigan oxirgi yozuvlar soni
+const SEEN_EVERY_MS = 5 * 60 * 1000; // "oxirgi faollik"ni 5 daqiqada bir yangilaymiz
+const VISIT_GAP_MS = 30 * 60 * 1000; // 30 daqiqadan ko'p tanaffusdan keyin qayta kirish — jurnalga "ochdi"
+const USER_STATUSES = ["approved", "rejected", "blocked"];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -18,56 +23,9 @@ const json = (data, status = 200) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 
-const sha = (s) => createHash("sha256").update(String(s)).digest();
-const safeEqual = (a, b) => timingSafeEqual(sha(a), sha(b));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// ---------- Sozlamalar (env) ----------
-
-let cachedKey = null;
-let cachedAuth = null;
-
-/**
- * Login/parollarni muhit o'zgaruvchilaridan o'qiydi:
- * ADMIN_LOGIN, ADMIN_PASSWORD, VIEWER_LOGIN, VIEWER_PASSWORD, SESSION_SECRET
- */
-export function authConfigFromEnv(env) {
-  const users = [
-    { role: "admin", login: (env.ADMIN_LOGIN || "boshliq").trim(), password: env.ADMIN_PASSWORD || "" },
-    { role: "viewer", login: (env.VIEWER_LOGIN || "jamoa").trim(), password: env.VIEWER_PASSWORD || "" },
-  ].filter((u) => u.password);
-
-  const key = JSON.stringify([users, env.SESSION_SECRET || ""]);
-  if (key !== cachedKey) {
-    // Parol o'zgarsa kalit ham o'zgaradi va eski kirishlar bekor bo'ladi.
-    const secret = scryptSync(key, "deadline-nazorati", 32);
-    cachedAuth = { users, secret };
-    cachedKey = key;
-  }
-  return cachedAuth;
-}
-
-function signToken(payload, secret) {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", secret).update(body).digest("base64url");
-  return `${body}.${sig}`;
-}
-
-function verifyToken(token, auth) {
-  if (!token) return null;
-  const [body, sig] = token.split(".");
-  if (!body || !sig) return null;
-  const expected = createHmac("sha256", auth.secret).update(body).digest("base64url");
-  if (!safeEqual(sig, expected)) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString());
-    if (!(payload.exp > Date.now())) return null;
-    if (!auth.users.some((u) => u.role === payload.role)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
+const nowIso = () => new Date().toISOString();
+const expiry = () => Date.now() + TOKEN_DAYS * 86_400_000;
 
 async function readBody(req) {
   try {
@@ -77,40 +35,133 @@ async function readBody(req) {
   }
 }
 
-// ---------- So'rovlar ----------
+const loadUsers = async (storage) => (await storage.get("users")) ?? [];
 
-export async function handleApi(req, storage, auth) {
+async function addLog(storage, entry) {
+  const log = (await storage.get("log")) ?? [];
+  log.unshift({ at: nowIso(), ...entry });
+  await storage.set("log", log.slice(0, LOG_LIMIT));
+}
+
+async function accessData(storage) {
+  return { users: await loadUsers(storage), log: (await storage.get("log")) ?? [] };
+}
+
+export async function handleApi(req, storage, auth, options = {}) {
   const { pathname } = new URL(req.url);
-  const [resource, rawId] = pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
+  const [resource, rawId, ...rest] = pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
   const id = rawId && decodeURIComponent(rawId);
   const method = req.method;
+  if (rest.length) return json({ error: "Topilmadi" }, 404);
 
   try {
-    // Kirish (login) — parolsiz ochiq yagona manzil
+    // ---------- Ochiq manzillar (kirishsiz) ----------
+
+    if (resource === "config" && method === "GET" && !id) {
+      return json({ googleClientId: auth.googleClientId || null });
+    }
+
+    // Boshliq: login + parol
     if (resource === "login" && method === "POST" && !id) {
-      if (auth.users.length === 0) {
-        throw new BoardError("Parollar sozlanmagan: ADMIN_PASSWORD va VIEWER_PASSWORD ni kiriting", 500);
-      }
+      if (!auth.admin.password) throw new BoardError("Parol sozlanmagan: ADMIN_PASSWORD ni kiriting", 500);
       const body = (await readBody(req)) ?? {};
-      const login = String(body.login ?? "").trim().toLowerCase();
+      const login = String(body.login ?? "").trim();
       const password = String(body.password ?? "");
-      const user = auth.users.find((u) => safeEqual(login, u.login.toLowerCase()) && safeEqual(password, u.password));
-      if (!user) {
+      if (!(safeEqual(login.toLowerCase(), auth.admin.login.toLowerCase()) && safeEqual(password, auth.admin.password))) {
+        await addLog(storage, { type: "failed", name: login.slice(0, 60) || "—" });
         await sleep(700); // parolni tanlab topishni sekinlashtirish
         throw new BoardError("Login yoki parol noto'g'ri", 401);
       }
-      const token = signToken({ role: user.role, exp: Date.now() + TOKEN_DAYS * 86_400_000 }, auth.secret);
-      return json({ role: user.role, token });
+      await addLog(storage, { type: "admin_login", name: "Boshliq" });
+      return json({ role: "admin", name: "Boshliq", token: signToken({ role: "admin", exp: expiry() }, auth.secret) });
     }
 
-    const authHeader = req.headers.get("authorization") ?? "";
-    const session = verifyToken(authHeader.replace(/^Bearer\s+/i, ""), auth);
-    if (!session) return json({ error: "Avval tizimga kiring" }, 401);
+    // Boshqalar: Google orqali. Birinchi marta — zayavka, boshliq qabul qilsa — kiradi.
+    if (resource === "google" && method === "POST" && !id) {
+      if (!auth.googleClientId) throw new BoardError("Google orqali kirish sozlanmagan (GOOGLE_CLIENT_ID)", 500);
+      const body = (await readBody(req)) ?? {};
+      const google = await verifyGoogleIdToken(body.credential, auth.googleClientId, options.getJwks);
+      if (!google) throw new BoardError("Google tasdiqlamadi, qaytadan kirib ko'ring", 401);
 
-    let board = await storage.get();
+      const users = await loadUsers(storage);
+      let user = users.find((u) => u.email === google.email);
+      if (!user) {
+        user = { ...google, status: "pending", requestedAt: nowIso(), decidedAt: null, lastLoginAt: null, lastSeenAt: null };
+        users.push(user);
+        await storage.set("users", users);
+        await addLog(storage, { type: "request", email: user.email, name: user.name });
+        return json({ status: "pending" });
+      }
+      if (user.status !== "approved") return json({ status: user.status }); // pending | rejected | blocked
+
+      Object.assign(user, { name: google.name, picture: google.picture, lastLoginAt: nowIso(), lastSeenAt: nowIso() });
+      await storage.set("users", users);
+      await addLog(storage, { type: "login", email: user.email, name: user.name });
+      return json({
+        status: "approved",
+        role: "viewer",
+        name: user.name,
+        email: user.email,
+        picture: user.picture,
+        token: signToken({ role: "viewer", email: user.email, exp: expiry() }, auth.secret),
+      });
+    }
+
+    // ---------- Shu yerdan boshlab kirish shart ----------
+
+    const authHeader = req.headers.get("authorization") ?? "";
+    const session = readToken(authHeader.replace(/^Bearer\s+/i, ""), auth.secret);
+    if (!session || !["admin", "viewer"].includes(session.role)) return json({ error: "Avval tizimga kiring" }, 401);
+
+    if (session.role === "viewer") {
+      // Har safar tekshiramiz: boshliq bloklagan bo'lsa, darhol chiqarib yuboriladi.
+      const users = await loadUsers(storage);
+      const user = users.find((u) => u.email === session.email && u.status === "approved");
+      if (!user) return json({ error: "Ruxsatingiz bekor qilingan" }, 401);
+
+      const sinceSeen = Date.now() - (Date.parse(user.lastSeenAt) || 0);
+      if (resource === "board" && method === "GET" && sinceSeen > SEEN_EVERY_MS) {
+        if (sinceSeen > VISIT_GAP_MS) await addLog(storage, { type: "visit", email: user.email, name: user.name });
+        user.lastSeenAt = nowIso();
+        await storage.set("users", users);
+      }
+    }
+
+    // ---------- Foydalanuvchilar va tarix (faqat boshliq) ----------
+
+    if (resource === "users") {
+      if (session.role !== "admin") return json({ error: "Faqat boshliq uchun" }, 403);
+      if (method === "GET" && !id) return json(await accessData(storage));
+      if (!id) return json({ error: "Topilmadi" }, 404);
+
+      const users = await loadUsers(storage);
+      const index = users.findIndex((u) => u.email === id.toLowerCase());
+      if (index === -1) throw new BoardError("Foydalanuvchi topilmadi", 404);
+      const user = users[index];
+
+      if (method === "PUT") {
+        const status = (await readBody(req))?.status;
+        if (!USER_STATUSES.includes(status)) throw new BoardError("Noto'g'ri holat");
+        user.status = status;
+        user.decidedAt = nowIso();
+        await storage.set("users", users);
+        await addLog(storage, { type: status, email: user.email, name: user.name });
+      } else if (method === "DELETE") {
+        users.splice(index, 1);
+        await storage.set("users", users);
+        await addLog(storage, { type: "removed", email: user.email, name: user.name });
+      } else {
+        return json({ error: "Topilmadi" }, 404);
+      }
+      return json(await accessData(storage));
+    }
+
+    // ---------- Vazifalar ----------
+
+    let board = await storage.get("board");
     if (!board) {
       board = createDefaultBoard();
-      await storage.set(board);
+      await storage.set("board", board);
     }
 
     if (method === "GET" && resource === "board" && !id) return json(board);
@@ -127,7 +178,7 @@ export async function handleApi(req, storage, auth) {
     else if (resource === "tasks" && method === "DELETE") next = deleteTask(board, id);
     else next = setMembers(board, (await readBody(req))?.members);
 
-    await storage.set(next);
+    await storage.set("board", next);
     return json(next);
   } catch (err) {
     if (err instanceof BoardError) return json({ error: err.message }, err.status);

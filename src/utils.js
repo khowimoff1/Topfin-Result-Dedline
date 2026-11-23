@@ -58,3 +58,25 @@ export function sortTasks(tasks) {
       PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
   );
 }
+
+/** "23-noyabr 2026, 14:05" */
+export function formatDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()}-${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+}
+
+/** "5 daqiqa oldin", "3 soat oldin", "2 kun oldin" */
+export function timeAgo(iso) {
+  if (!iso) return "hech qachon";
+  const minutes = Math.floor((Date.now() - new Date(iso)) / 60_000);
+  if (minutes < 1) return "hozirgina";
+  if (minutes < 60) return `${minutes} daqiqa oldin`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} soat oldin`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} kun oldin`;
+  return formatDateTime(iso);
+}

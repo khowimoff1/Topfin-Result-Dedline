@@ -5,6 +5,7 @@ import TaskModal from "./components/TaskModal.jsx";
 import MembersModal from "./components/MembersModal.jsx";
 import ListView from "./components/ListView.jsx";
 import LoginPage from "./components/LoginPage.jsx";
+import UsersModal from "./components/UsersModal.jsx";
 import { daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
 import { toISODate } from "../shared/board.js";
 
@@ -27,22 +28,32 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null); // {task?, assigneeId?}
   const [membersOpen, setMembersOpen] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
+  const [access, setAccess] = useState({ users: [], log: [] }); // faqat boshliq uchun
+  const [logoutNotice, setLogoutNotice] = useState("");
+
+  const isAdmin = session?.role === "admin";
 
   const refresh = useCallback(async () => {
     try {
-      setBoard(await api.fetchBoard());
+      const [nextBoard, nextAccess] = await Promise.all([api.fetchBoard(), isAdmin ? api.fetchAccess() : null]);
+      setBoard(nextBoard);
+      if (nextAccess) setAccess(nextAccess);
       setLoadError("");
     } catch (err) {
       setLoadError(err.message);
     }
-  }, []);
+  }, [isAdmin]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback((reason = "") => {
     api.logout();
     setSession(null);
     setBoard(null);
     setEditing(null);
     setMembersOpen(false);
+    setUsersOpen(false);
+    setAccess({ users: [], log: [] });
+    setLogoutNotice(reason);
   }, []);
 
   // Kalit eskirsa yoki parol o'zgarsa — kirish sahifasiga qaytamiz
@@ -121,9 +132,10 @@ export default function App() {
     );
   }, [board, filter, search]);
 
-  if (!session) return <LoginPage onLogin={setSession} />;
+  if (!session) return <LoginPage onLogin={setSession} notice={logoutNotice} />;
 
-  const canEdit = session.role === "admin";
+  const canEdit = isAdmin;
+  const pendingCount = access.users.filter((u) => u.status === "pending").length;
 
   if (!board) {
     return (
@@ -152,9 +164,27 @@ export default function App() {
           <p className="muted">Bugun: {formatDate(today)}</p>
         </div>
         <div className="top-actions">
-          <span className={`role-badge role-${session.role}`}>{canEdit ? "👑 Boshliq" : "👁 Faqat ko'rish"}</span>
+          {canEdit ? (
+            <span className="role-badge role-admin">👑 Boshliq</span>
+          ) : (
+            <span className="user-chip" title={session.email}>
+              {session.picture ? (
+                <img className="avatar sm user-photo" src={session.picture} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="avatar sm" style={{ background: "#64748b" }}>{initials(session.name)}</span>
+              )}
+              <span>
+                <b>{session.name}</b>
+                <small className="muted">Faqat ko'rish</small>
+              </span>
+            </span>
+          )}
           {canEdit && (
             <>
+              <button className="btn" onClick={() => setUsersOpen(true)}>
+                🔐 Foydalanuvchilar
+                {pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}
+              </button>
               <button className="btn" onClick={() => setMembersOpen(true)}>
                 👥 Xodimlar
               </button>
@@ -163,7 +193,7 @@ export default function App() {
               </button>
             </>
           )}
-          <button className="btn" onClick={logout}>
+          <button className="btn" onClick={() => logout()}>
             Chiqish
           </button>
         </div>
@@ -254,6 +284,14 @@ export default function App() {
           onSave={saveTask}
           onDelete={removeTask}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {usersOpen && canEdit && (
+        <UsersModal
+          access={access}
+          onStatus={async (email, status) => setAccess(await api.setUserStatus(email, status))}
+          onRemove={async (email) => setAccess(await api.removeUser(email))}
+          onClose={() => setUsersOpen(false)}
         />
       )}
       {membersOpen && canEdit && (
