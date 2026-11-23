@@ -1,4 +1,4 @@
-// Kirish (autentifikatsiya) yordamchilari: boshliq paroli, kalit (token),
+// Kirish (autentifikatsiya) yordamchilari: admin paroli, kalit (token),
 // Google ID token tekshiruvi. Faqat serverda ishlaydi.
 import { createHash, createHmac, createPublicKey, scryptSync, timingSafeEqual, verify } from "node:crypto";
 
@@ -14,7 +14,7 @@ let cachedSecret = null;
 
 /**
  * Muhit o'zgaruvchilari:
- *   ADMIN_LOGIN, ADMIN_PASSWORD — boshliq
+ *   ADMIN_LOGIN, ADMIN_PASSWORD — admin
  *   GOOGLE_CLIENT_ID            — boshqalar Google orqali kiradi
  *   SESSION_SECRET              — kalitlarni imzolash uchun maxfiy matn
  */
@@ -22,7 +22,7 @@ export function authConfigFromEnv(env) {
   const admin = { login: (env.ADMIN_LOGIN || "boshliq").trim(), password: env.ADMIN_PASSWORD || "" };
   const key = JSON.stringify([admin, env.SESSION_SECRET || ""]);
   if (key !== cachedKey) {
-    // Boshliq paroli o'zgarsa kalit ham o'zgaradi va eski kirishlar bekor bo'ladi.
+    // Admin paroli o'zgarsa kalit ham o'zgaradi va eski kirishlar bekor bo'ladi.
     cachedSecret = scryptSync(key, "deadline-nazorati", 32);
     cachedKey = key;
   }

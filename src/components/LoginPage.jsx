@@ -9,10 +9,10 @@ const STATUS_MESSAGES = {
   pending: {
     icon: "⏳",
     title: "Zayavkangiz yuborildi",
-    text: "Boshliq ruxsat berishi bilan sayt o'zi ochiladi. Bu sahifani yopmasangiz bo'ldi.",
+    text: "Admin ruxsat berishi bilan sayt o'zi ochiladi. Bu sahifani yopmasangiz bo'ldi.",
   },
-  rejected: { icon: "⛔", title: "Ruxsat berilmadi", text: "Boshliq zayavkangizni rad etgan. Savol bo'lsa, unga murojaat qiling." },
-  blocked: { icon: "⛔", title: "Kirish to'xtatilgan", text: "Boshliq sizning kirishingizni o'chirib qo'ygan." },
+  rejected: { icon: "⛔", title: "Ruxsat berilmadi", text: "Admin zayavkangizni rad etgan. Savol bo'lsa, unga murojaat qiling." },
+  blocked: { icon: "⛔", title: "Kirish to'xtatilgan", text: "Admin sizning kirishingizni o'chirib qo'ygan." },
 };
 
 export default function LoginPage({ onLogin, notice }) {
@@ -83,7 +83,7 @@ export default function LoginPage({ onLogin, notice }) {
               <p className="muted center">Yuklanmoqda…</p>
             ) : config.googleClientId ? (
               <>
-                {!message && <p className="muted small center">Jamoa a'zolari Google akkaunti orqali kiradi. Birinchi marta kirganda boshliqqa zayavka boradi.</p>}
+                {!message && <p className="muted small center">Jamoa a'zolari Google akkaunti orqali kiradi. Birinchi marta kirganda adminga zayavka boradi.</p>}
                 <GoogleButton clientId={config.googleClientId} onCredential={tryGoogle} onError={setError} />
               </>
             ) : (

@@ -54,7 +54,7 @@ const enc = encodeURIComponent;
 
 export const getConfig = () => request("config");
 
-/** Boshliq: login + parol */
+/** Admin: login + parol */
 export async function login(loginName, password) {
   return saveSession(await post("login", { login: loginName, password }));
 }
@@ -74,7 +74,7 @@ export const updateTask = (id, task) => post(`tasks/${enc(id)}`, task, "PUT");
 export const deleteTask = (id) => request(`tasks/${enc(id)}`, { method: "DELETE" });
 export const saveMembers = (members) => post("members", { members }, "PUT");
 
-// ---------- Foydalanuvchilar va tarix (faqat boshliq) ----------
+// ---------- Foydalanuvchilar va tarix (faqat admin) ----------
 
 export const fetchAccess = () => request("users");
 export const setUserStatus = (email, status) => post(`users/${enc(email)}`, { status }, "PUT");

@@ -29,7 +29,7 @@ export default function App() {
   const [editing, setEditing] = useState(null); // {task?, assigneeId?}
   const [membersOpen, setMembersOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
-  const [access, setAccess] = useState({ users: [], log: [] }); // faqat boshliq uchun
+  const [access, setAccess] = useState({ users: [], log: [] }); // faqat admin uchun
   const [logoutNotice, setLogoutNotice] = useState("");
 
   const isAdmin = session?.role === "admin";

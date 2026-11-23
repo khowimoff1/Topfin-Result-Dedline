@@ -7,7 +7,7 @@
 // auth    — authConfigFromEnv(...) natijasi
 //
 // Rollar:
-//  - admin  (boshliq, login + parol)            — hammasini ko'radi va o'zgartiradi
+//  - admin  (login + parol)                     — hammasini ko'radi va o'zgartiradi
 //  - viewer (boshqalar, Google orqali, ruxsat bilan) — faqat ko'radi
 import { TOKEN_DAYS, readToken, safeEqual, signToken, verifyGoogleIdToken } from "./auth.js";
 import { BoardError, addTask, createDefaultBoard, deleteTask, setMembers, updateTask } from "./board.js";
@@ -61,7 +61,7 @@ export async function handleApi(req, storage, auth, options = {}) {
       return json({ googleClientId: auth.googleClientId || null });
     }
 
-    // Boshliq: login + parol
+    // Admin: login + parol
     if (resource === "login" && method === "POST" && !id) {
       if (!auth.admin.password) throw new BoardError("Parol sozlanmagan: ADMIN_PASSWORD ni kiriting", 500);
       const body = (await readBody(req)) ?? {};
@@ -72,11 +72,11 @@ export async function handleApi(req, storage, auth, options = {}) {
         await sleep(700); // parolni tanlab topishni sekinlashtirish
         throw new BoardError("Login yoki parol noto'g'ri", 401);
       }
-      await addLog(storage, { type: "admin_login", name: "Boshliq" });
-      return json({ role: "admin", name: "Boshliq", token: signToken({ role: "admin", exp: expiry() }, auth.secret) });
+      await addLog(storage, { type: "admin_login", name: "Admin" });
+      return json({ role: "admin", name: "Admin", token: signToken({ role: "admin", exp: expiry() }, auth.secret) });
     }
 
-    // Boshqalar: Google orqali. Birinchi marta — zayavka, boshliq qabul qilsa — kiradi.
+    // Boshqalar: Google orqali. Birinchi marta — zayavka, admin qabul qilsa — kiradi.
     if (resource === "google" && method === "POST" && !id) {
       if (!auth.googleClientId) throw new BoardError("Google orqali kirish sozlanmagan (GOOGLE_CLIENT_ID)", 500);
       const body = (await readBody(req)) ?? {};
@@ -114,7 +114,7 @@ export async function handleApi(req, storage, auth, options = {}) {
     if (!session || !["admin", "viewer"].includes(session.role)) return json({ error: "Avval tizimga kiring" }, 401);
 
     if (session.role === "viewer") {
-      // Har safar tekshiramiz: boshliq bloklagan bo'lsa, darhol chiqarib yuboriladi.
+      // Har safar tekshiramiz: admin bloklagan bo'lsa, darhol chiqarib yuboriladi.
       const users = await loadUsers(storage);
       const user = users.find((u) => u.email === session.email && u.status === "approved");
       if (!user) return json({ error: "Ruxsatingiz bekor qilingan" }, 401);
@@ -127,10 +127,10 @@ export async function handleApi(req, storage, auth, options = {}) {
       }
     }
 
-    // ---------- Foydalanuvchilar va tarix (faqat boshliq) ----------
+    // ---------- Foydalanuvchilar va tarix (faqat admin) ----------
 
     if (resource === "users") {
-      if (session.role !== "admin") return json({ error: "Faqat boshliq uchun" }, 403);
+      if (session.role !== "admin") return json({ error: "Faqat admin uchun" }, 403);
       if (method === "GET" && !id) return json(await accessData(storage));
       if (!id) return json({ error: "Topilmadi" }, 404);
 
@@ -170,7 +170,7 @@ export async function handleApi(req, storage, auth, options = {}) {
       (resource === "tasks" && ((method === "POST" && !id) || (["PUT", "DELETE"].includes(method) && id))) ||
       (resource === "members" && method === "PUT" && !id);
     if (!isMutation) return json({ error: "Topilmadi" }, 404);
-    if (session.role !== "admin") return json({ error: "Faqat boshliq o'zgartira oladi" }, 403);
+    if (session.role !== "admin") return json({ error: "Faqat admin o'zgartira oladi" }, 403);
 
     let next;
     if (resource === "tasks" && method === "POST") next = addTask(board, await readBody(req));

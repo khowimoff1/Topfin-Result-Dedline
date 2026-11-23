@@ -10,7 +10,7 @@ const LOG_LABELS = {
   removed: ["🗑", "Ro'yxatdan o'chirildi"],
   login: ["🔑", "Google orqali kirdi"],
   visit: ["👁", "Saytni ochdi"],
-  admin_login: ["👑", "Boshliq kirdi"],
+  admin_login: ["👑", "Admin kirdi"],
   failed: ["⚠️", "Noto'g'ri parol bilan urinish"],
 };
 
@@ -55,7 +55,7 @@ export default function UsersModal({ access, onStatus, onRemove, onClose }) {
     const map = new Map();
     for (const e of log) {
       const key = e.email || (e.type === "admin_login" ? "admin" : "");
-      if (key && !map.has(key)) map.set(key, e.email ? e.name : "Boshliq");
+      if (key && !map.has(key)) map.set(key, e.email ? e.name : "Admin");
     }
     return [...map];
   }, [log]);
@@ -180,7 +180,7 @@ export default function UsersModal({ access, onStatus, onRemove, onClose }) {
                         <tr key={`${e.at}-${i}`} className={e.type === "failed" ? "level-overdue" : ""}>
                           <td className="nowrap">{formatDateTime(e.at)}</td>
                           <td>
-                            <b>{e.name}</b>
+                            <b>{e.type === "admin_login" ? "Admin" : e.name}</b>
                             {e.email && <div className="muted small">{e.email}</div>}
                           </td>
                           <td>
