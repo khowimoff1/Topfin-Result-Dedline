@@ -1,5 +1,5 @@
-// Kompaniya logosi (kirish sahifasi va sarlavhada)
-export const LOGO_URL = "https://drilling.topfinresult.uz/assets/logo-light.svg";
+// Kompaniya logosi (kirish sahifasi va sarlavhada) — public/logo.svg
+export const LOGO_URL = "/logo.svg";
 
 const MONTHS = [
   "yanvar", "fevral", "mart", "aprel", "may", "iyun",
