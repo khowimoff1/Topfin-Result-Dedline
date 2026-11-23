@@ -6,7 +6,7 @@ import MembersModal from "./components/MembersModal.jsx";
 import ListView from "./components/ListView.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import UsersModal from "./components/UsersModal.jsx";
-import { daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
+import { LOGO_URL, daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
 import { toISODate } from "../shared/board.js";
 
 const REFRESH_MS = 30_000; // boshqa xodimlarning o'zgarishlarini 30 soniyada bir yangilash
@@ -159,13 +159,16 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div>
-          <h1>⏰ Deadline nazorati</h1>
-          <p className="muted">Bugun: {formatDate(today)}</p>
+        <div className="brand">
+          <img className="brand-logo" src={LOGO_URL} alt="Topfin Result" width="99" height="48" />
+          <div>
+            <h1>Deadline nazorati</h1>
+            <p className="muted">Bugun: {formatDate(today)}</p>
+          </div>
         </div>
         <div className="top-actions">
           {canEdit ? (
-            <span className="role-badge role-admin">👑 Boshliq</span>
+            <span className="role-badge role-admin">👑 Admin</span>
           ) : (
             <span className="user-chip" title={session.email}>
               {session.picture ? (

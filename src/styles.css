@@ -199,7 +199,7 @@ code { background: rgba(0, 0, 0, 0.06); padding: 1px 5px; border-radius: 4px; fo
 .login-card { width: min(380px, 100%); background: var(--surface); border-radius: 18px; box-shadow: 0 10px 40px rgba(20, 24, 40, 0.12); padding: 28px; }
 .login-head { text-align: center; display: grid; gap: 4px; margin-bottom: 4px; }
 .login-head h1 { font-size: 22px; }
-.login-logo { font-size: 36px; }
+.login-logo { width: 132px; height: 64px; justify-self: center; margin-bottom: 6px; }
 .btn-block { width: 100%; padding: 11px; }
 .role-badge { align-self: center; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: var(--done-bg); color: var(--muted); }
 .role-admin { background: #ede9fe; color: #5b21b6; }
@@ -247,4 +247,10 @@ code { background: rgba(0, 0, 0, 0.06); padding: 1px 5px; border-radius: 4px; fo
 @media (max-width: 600px) {
   .user-row { flex-wrap: wrap; }
   .user-actions { width: 100%; justify-content: flex-end; }
+}
+
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo { width: 99px; height: 48px; flex-shrink: 0; }
+@media (max-width: 600px) {
+  .brand-logo { width: 74px; height: 36px; }
 }

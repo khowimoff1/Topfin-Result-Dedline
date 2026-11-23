@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "../api.js";
 import GoogleButton from "./GoogleButton.jsx";
+import { LOGO_URL } from "../utils.js";
 
 const PENDING_CHECK_MS = 20_000; // zayavka qabul qilinganini 20 soniyada bir tekshiramiz
 
@@ -60,9 +61,9 @@ export default function LoginPage({ onLogin, notice }) {
     <div className="center-screen login-screen">
       <div className="login-card">
         <div className="login-head">
-          <span className="login-logo">⏰</span>
+          <img className="login-logo" src={LOGO_URL} alt="Topfin Result" width="132" height="64" />
           <h1>Deadline nazorati</h1>
-          <p className="muted">{mode === "admin" ? "Boshliq sifatida kirish" : "Davom etish uchun tizimga kiring"}</p>
+          <p className="muted">{mode === "admin" ? "Admin bo'lib kirish" : "Davom etish uchun tizimga kiring"}</p>
         </div>
 
         {mode === "google" ? (
@@ -90,7 +91,7 @@ export default function LoginPage({ onLogin, notice }) {
             )}
 
             <button type="button" className="link-btn" onClick={() => { setMode("admin"); setError(""); }}>
-              👑 Boshliq sifatida kirish
+              👑 Admin bo'lib kirish
             </button>
           </div>
         ) : (
