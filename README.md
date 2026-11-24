@@ -16,6 +16,9 @@ Jamoa (4 xodim) uchun vazifalar va deadline'lar shabloni.
 - **📨 Telegram bot:**
   - xodimga yangi vazifa belgilansa, deadline o'zgarsa, vazifa o'tkazilsa yoki bekor qilinsa — xabar
   - xabardagi tugmalar: **▶️ Boshladim**, **✅ Bajarildi** — saytdagi holat ham o'zgaradi, admin'ga xabar boradi
+  - xodim **✅ Bajarildi** bossa vazifa darhol yopilmaydi: admin'ga «Rostdan bajarildimi?» savoli
+    **✅ Tasdiqlash / ↩️ Qaytarish** tugmalari bilan boradi (saytda ham shu tugmalar chiqadi).
+    Tasdiqlansa — vazifa yopiladi, qaytarilsa — xodimga «qayta ishlang» xabari boradi
   - har kuni soat **9:00** da — kechikkan, bugungi va ertangi vazifalar haqida eslatma (admin'ga — umumiy holat)
   - saytga yangi zayavka kelsa — admin'ga **Qabul qilish / Rad etish** tugmalari bilan xabar
   - buyruqlar: `/vazifalar`, `/bugun`, `/hammasi` (admin)

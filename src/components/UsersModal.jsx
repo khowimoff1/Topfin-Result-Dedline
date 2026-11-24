@@ -15,6 +15,9 @@ const LOG_LABELS = {
   tg_link: ["🔗", "Telegram botga ulandi"],
   tg_doing: ["▶️", "Telegram'da vazifani boshladi"],
   tg_done: ["✅", "Telegram'da vazifani bajardi"],
+  tg_review: ["🙋", "Bajardim dedi (tasdiq kutmoqda)"],
+  tg_confirm: ["✅", "Bajarilganini tasdiqladi"],
+  tg_return: ["↩️", "Vazifani qaytardi"],
 };
 
 const STATUS_LABELS = {

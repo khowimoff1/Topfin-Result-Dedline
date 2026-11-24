@@ -55,7 +55,7 @@ export default function ListView({ tasks, members, canEdit, onEdit, onToggleDone
                 <td>
                   <span className={`prio prio-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span>
                 </td>
-                <td>{STATUS_LABELS[t.status]}</td>
+                <td>{t.doneRequestedAt ? <span className="review-chip">⏳ Tasdiq kutilmoqda</span> : STATUS_LABELS[t.status]}</td>
               </tr>
             );
           })}

@@ -80,6 +80,16 @@ function buildTask(input, board, base = {}) {
     completedAt = base.status === "done" && base.completedAt ? base.completedAt : new Date().toISOString();
   }
 
+  // Xodim botda "Bajarildi" bosganda — admin tasdiqlashini kutadi (doneRequestedAt).
+  // Holat o'zgarsa (tasdiqlansa yoki qaytarilsa) yoki doneRequested:false bo'lsa — tozalanadi.
+  let doneRequestedAt = null;
+  if (status !== "done") {
+    if (input.doneRequested === true) doneRequestedAt = base.doneRequestedAt ?? new Date().toISOString();
+    else if (input.doneRequested !== false && status === base.status && src.assigneeId === base.assigneeId) {
+      doneRequestedAt = base.doneRequestedAt ?? null;
+    }
+  }
+
   return {
     id: base.id ?? uid(),
     title,
@@ -90,6 +100,7 @@ function buildTask(input, board, base = {}) {
     status,
     createdAt: base.createdAt ?? new Date().toISOString(),
     completedAt,
+    doneRequestedAt,
   };
 }
 

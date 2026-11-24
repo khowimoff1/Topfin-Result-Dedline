@@ -1,6 +1,6 @@
 import { PRIORITY_LABELS, STATUS_LABELS, deadlineInfo, formatDate } from "../utils.js";
 
-export default function TaskCard({ task, canEdit, onEdit, onToggleDone, onDelete }) {
+export default function TaskCard({ task, canEdit, onEdit, onToggleDone, onDelete, onReview }) {
   const info = deadlineInfo(task);
   const done = task.status === "done";
 
@@ -43,8 +43,26 @@ export default function TaskCard({ task, canEdit, onEdit, onToggleDone, onDelete
       </div>
       <div className="task-meta">
         <span className={`prio prio-${task.priority}`}>{PRIORITY_LABELS[task.priority]}</span>
-        {!done && <span className={`status status-${task.status}`}>{STATUS_LABELS[task.status]}</span>}
+        {!done && !task.doneRequestedAt && <span className={`status status-${task.status}`}>{STATUS_LABELS[task.status]}</span>}
       </div>
+
+      {task.doneRequestedAt && (
+        <div className="review-box" onClick={(e) => e.stopPropagation()}>
+          <span className="review-text">
+            ⏳ Xodim «bajardim» dedi{canEdit ? " — rostdan bajarildimi?" : ", admin tasdig'i kutilmoqda"}
+          </span>
+          {canEdit && (
+            <span className="review-actions">
+              <button className="btn btn-sm btn-success" onClick={() => onReview(task, true)}>
+                ✅ Tasdiqlash
+              </button>
+              <button className="btn btn-sm" onClick={() => onReview(task, false)}>
+                ↩️ Qaytarish
+              </button>
+            </span>
+          )}
+        </div>
+      )}
     </article>
   );
 }

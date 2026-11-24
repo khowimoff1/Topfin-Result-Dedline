@@ -15,6 +15,7 @@ const REFRESH_MS = 30_000; // boshqa xodimlarning o'zgarishlarini 30 soniyada bi
 const FILTERS = [
   ["active", "Faol"],
   ["overdue", "Kechikkan"],
+  ["review", "⏳ Tasdiq kutilmoqda"],
   ["done", "Bajarilgan"],
   ["all", "Hammasi"],
 ];
@@ -99,6 +100,13 @@ export default function App() {
       setToast(err.message)
     );
 
+  // Xodim botda "Bajarildi" bosgan vazifani tasdiqlash yoki qaytarish
+  const reviewTask = (task, ok) =>
+    run(
+      () => api.updateTask(task.id, ok ? { status: "done" } : { status: "doing", doneRequested: false }),
+      ok ? "Tasdiqlandi — vazifa yopildi" : "Xodimga qaytarildi"
+    ).catch((err) => setToast(err.message));
+
   const removeTask = async (task) => {
     if (!window.confirm(`"${task.title}" vazifasini o'chirasizmi?`)) return;
     try {
@@ -121,6 +129,7 @@ export default function App() {
         return d >= 0 && d <= 3;
       }).length,
       done: tasks.length - open.length,
+      review: open.filter((t) => t.doneRequestedAt).length,
     };
   }, [board]);
 
@@ -130,6 +139,7 @@ export default function App() {
       (board?.tasks ?? []).filter((t) => {
         if (filter === "active" && t.status === "done") return false;
         if (filter === "done" && t.status !== "done") return false;
+        if (filter === "review" && !t.doneRequestedAt) return false;
         if (filter === "overdue" && (t.status === "done" || daysLeft(t.deadline) >= 0)) return false;
         if (q && !`${t.title} ${t.description}`.toLowerCase().includes(q)) return false;
         return true;
@@ -211,6 +221,11 @@ export default function App() {
       </header>
 
       {loadError && <div className="notice notice-error">Yangilashda xatolik: {loadError}</div>}
+      {canEdit && stats.review > 0 && filter !== "review" && (
+        <button className="notice notice-review" onClick={() => setFilter("review")}>
+          ⏳ <b>{stats.review} ta</b> vazifani xodim «bajardim» dedi — tasdig'ingizni kutmoqda. Ko'rish →
+        </button>
+      )}
 
       <section className="stats">
         <Stat label="Faol vazifalar" value={stats.active} />
@@ -221,7 +236,7 @@ export default function App() {
 
       <section className="toolbar">
         <div className="segmented">
-          {FILTERS.map(([v, l]) => (
+          {FILTERS.filter(([v]) => v !== "review" || stats.review > 0 || filter === "review").map(([v, l]) => (
             <button key={v} className={filter === v ? "active" : ""} onClick={() => setFilter(v)}>
               {l}
             </button>
@@ -274,7 +289,7 @@ export default function App() {
                     <p className="empty">Vazifa yo'q</p>
                   ) : (
                     mine.map((t) => (
-                      <TaskCard key={t.id} task={t} canEdit={canEdit} onEdit={(task) => setEditing({ task })} onToggleDone={toggleDone} onDelete={removeTask} />
+                      <TaskCard key={t.id} task={t} canEdit={canEdit} onEdit={(task) => setEditing({ task })} onToggleDone={toggleDone} onDelete={removeTask} onReview={reviewTask} />
                     ))
                   )}
                 </div>

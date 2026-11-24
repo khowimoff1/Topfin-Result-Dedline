@@ -3,7 +3,9 @@
 //
 // Bot nima qiladi:
 //  - xodimga yangi vazifa belgilansa / deadline o'zgarsa / vazifa o'tkazilsa yoki bekor qilinsa — xabar
-//  - xabardagi tugmalar: "▶️ Boshladim", "✅ Bajarildi" — saytdagi holat ham o'zgaradi, admin'ga xabar boradi
+//  - xabardagi tugmalar: "▶️ Boshladim", "✅ Bajarildi" — saytdagi holat ham o'zgaradi
+//  - xodim "Bajarildi" bossa — admin'ga "Rostdan bajarildimi?" (Tasdiqlash / Qaytarish) boradi;
+//    admin tasdiqlamaguncha vazifa yopilmaydi
 //  - /vazifalar, /bugun — xodimning o'z vazifalari; /hammasi — admin uchun umumiy holat
 //  - har kuni ertalab — kun gapi (motivatsiya) + bugungi, ertangi va kechikkan vazifalar
 //  - saytga yangi zayavka kelsa — admin'ga "Qabul qilish / Rad etish" tugmalari bilan xabar
@@ -144,6 +146,8 @@ async function notifyAdmins(tg, storage, text, keyboard, exceptChatId) {
 
 // ---------- Xabar matnlari ----------
 
+const statusLabel = (task) => (task.doneRequestedAt ? "⏳ Admin tasdig'i kutilmoqda" : STATUS[task.status]);
+
 function taskText(task, today, heading) {
   return [
     heading,
@@ -152,13 +156,14 @@ function taskText(task, today, heading) {
     task.description && `<i>${esc(short(task.description, 500))}</i>`,
     `📅 Deadline: <b>${fmtDate(task.deadline)}</b> — ${leftLabel(task, today)}`,
     `⚡ Muhimlik: ${PRIORITY[task.priority]}`,
-    `📍 Holat: <b>${STATUS[task.status]}</b>`,
+    `📍 Holat: <b>${statusLabel(task)}</b>`,
   ]
     .filter(Boolean)
     .join("\n");
 }
 
 function taskButtons(task) {
+  if (task.doneRequestedAt) return []; // admin javobini kutyapti
   if (task.status === "done") return [[{ text: "↩️ Qayta ochish", callback_data: `s:${task.id}:doing` }]];
   const row = [];
   if (task.status === "todo") row.push({ text: "▶️ Boshladim", callback_data: `s:${task.id}:doing` });
@@ -169,11 +174,18 @@ function taskButtons(task) {
 function taskListMessage(member, tasks, today) {
   const active = sortActive(tasks);
   if (active.length === 0) return { text: `🎉 <b>${esc(member.name)}</b>, faol vazifangiz yo'q!`, keyboard: [] };
-  const lines = active.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b>\n    📅 ${fmtDate(t.deadline)} — ${leftLabel(t, today)} · ${STATUS[t.status]}`);
-  const keyboard = active.slice(0, 15).map((t, i) => [
-    ...(t.status === "todo" ? [{ text: `▶️ ${i + 1}. Boshladim`, callback_data: `l:${t.id}:doing` }] : []),
-    { text: `✅ ${i + 1}. Bajarildi`, callback_data: `l:${t.id}:done` },
-  ]);
+  const lines = active.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b>\n    📅 ${fmtDate(t.deadline)} — ${leftLabel(t, today)} · ${statusLabel(t)}`);
+  const keyboard = active
+    .slice(0, 15)
+    .map((t, i) =>
+      t.doneRequestedAt
+        ? null
+        : [
+            ...(t.status === "todo" ? [{ text: `▶️ ${i + 1}. Boshladim`, callback_data: `l:${t.id}:doing` }] : []),
+            { text: `✅ ${i + 1}. Bajarildi`, callback_data: `l:${t.id}:done` },
+          ]
+    )
+    .filter(Boolean);
   return {
     text: `📋 <b>${esc(member.name)}</b>, faol vazifalaringiz (${active.length} ta):\n\n${lines.join("\n\n")}`,
     keyboard,
@@ -205,7 +217,9 @@ function overviewText(board, today) {
     return `👤 <b>${esc(m.name)}</b>: ${active.length} ta faol${overdue ? `, 🔴 ${overdue} ta kechikkan` : ""}${next}`;
   });
   const done = board.tasks.filter((t) => t.status === "done").length;
-  return `📊 <b>Umumiy holat</b> (${fmtDate(today)})\n\n${rows.join("\n")}\n\n✅ Bajarilgan: ${done} ta`;
+  const waiting = board.tasks.filter((t) => t.doneRequestedAt).length;
+  const waitingLine = waiting ? `\n⏳ Tasdig'ingizni kutayotgan: ${waiting} ta` : "";
+  return `📊 <b>Umumiy holat</b> (${fmtDate(today)})\n\n${rows.join("\n")}\n\n✅ Bajarilgan: ${done} ta${waitingLine}`;
 }
 
 const HELP_TEXT = [
@@ -213,11 +227,30 @@ const HELP_TEXT = [
   "",
   "Sizga vazifa belgilansa, deadline o'zgarsa yoki muddat yaqinlashsa — shu yerga xabar keladi.",
   "Xabardagi tugmalar bilan vazifani <b>boshlash</b> yoki <b>bajarildi</b> deb belgilash mumkin.",
+  "«Bajarildi» bosilgach vazifa admin tasdiqlagandan keyin yopiladi.",
   "",
   "/vazifalar — faol vazifalarim",
   "/bugun — bugungi, ertangi va kechikkan vazifalar",
   "/hammasi — umumiy holat (admin uchun)",
 ].join("\n");
+
+// ---------- "Bajarildi" ni admin tasdiqlashi ----------
+
+const reviewButtons = (task) => [[
+  { text: "✅ Ha, tasdiqlayman", callback_data: `r:${task.id}:ok` },
+  { text: "↩️ Yo'q, qaytarish", callback_data: `r:${task.id}:no` },
+]];
+
+function reviewRequestText(task, memberName, today) {
+  return taskText(task, today, `🙋 <b>${esc(memberName)}</b> vazifani <b>bajardim</b> dedi.\n\n❓ <b>Rostdan ham bajarildimi?</b>`);
+}
+
+/** Admin qaroridan keyin xodimga xabar. */
+function reviewResultText(task, ok, today) {
+  return ok
+    ? taskText(task, today, "🎉 <b>Admin tasdiqladi!</b> Vazifa bajarildi deb yopildi. Rahmat 👏")
+    : taskText(task, today, "↩️ <b>Admin vazifani qaytardi</b> — hali to'liq bajarilmagan.\nTekshirib, tayyor bo'lgach yana «✅ Bajarildi»ni bosing.");
+}
 
 // ---------- Saytdagi o'zgarishlar haqida xabar ----------
 
@@ -236,7 +269,11 @@ export async function notifyTaskChange(tg, storage, board, before, after) {
   } else if (before && !after) {
     tell(before.assigneeId, `🗑 Vazifa bekor qilindi:\n<b>${esc(before.title)}</b>`);
   } else if (before && after) {
-    if (before.assigneeId !== after.assigneeId) {
+    if (before.doneRequestedAt && !after.doneRequestedAt && before.assigneeId === after.assigneeId) {
+      // Admin saytda tasdiqladi yoki qaytardi
+      const ok = after.status === "done";
+      tell(after.assigneeId, reviewResultText(after, ok, today), taskButtons(after));
+    } else if (before.assigneeId !== after.assigneeId) {
       tell(after.assigneeId, taskText(after, today, `🔁 <b>${esc(nameOf(after.assigneeId))}, sizga vazifa o'tkazildi!</b>`), taskButtons(after));
       tell(before.assigneeId, `↪️ <b>${esc(after.title)}</b> vazifasi ${esc(nameOf(after.assigneeId))}ga o'tkazildi.`);
     } else if (before.deadline !== after.deadline) {
@@ -330,7 +367,7 @@ async function onMessage(tg, storage, message) {
       tgData.admins = [...tgData.admins.filter((a) => a.chatId !== chatId), info];
       await storage.set("telegram", tgData);
       await addLog(storage, { type: "tg_link", name: "Admin", detail: `Telegram: ${info.name}` });
-      return send(tg, chatId, `✅ <b>Siz admin sifatida ulandingiz!</b>\n\nEndi bu yerga keladi:\n• yangi zayavkalar (qabul/rad tugmalari bilan)\n• xodimlar vazifani boshlagani yoki bajargani\n• har kuni ertalab umumiy holat\n\n/hammasi — umumiy holat\n/bugun — bugungi va kechikkan vazifalar`);
+      return send(tg, chatId, `✅ <b>Siz admin sifatida ulandingiz!</b>\n\nEndi bu yerga keladi:\n• yangi zayavkalar (qabul/rad tugmalari bilan)\n• xodim vazifani bajardim desa — tasdiqlash / qaytarish tugmalari bilan\n• har kuni ertalab umumiy holat\n\n/hammasi — umumiy holat\n/bugun — bugungi va kechikkan vazifalar`);
     }
 
     const member = link?.type === "member" && board.members.find((m) => m.id === link.memberId);
@@ -394,6 +431,32 @@ async function onCallback(tg, storage, query) {
     const isOwner = member && task.assigneeId === member.id;
     if (!isOwner && !isAdmin) return answer("Bu vazifa sizga tegishli emas");
     if (!["doing", "done"].includes(value)) return answer("Noto'g'ri buyruq");
+    const today = todayISO();
+
+    // Xodim "Bajarildi" bossa — darhol yopilmaydi, admin'ga tasdiqlash uchun boradi
+    if (value === "done" && !isAdmin && task.status !== "done") {
+      if (!task.doneRequestedAt) {
+        try {
+          board = updateTask(board, task.id, { status: "doing", doneRequested: true });
+        } catch (err) {
+          return answer(err instanceof BoardError ? err.message : "Xatolik");
+        }
+        await storage.set("board", board);
+        await addLog(storage, { type: "tg_review", name: member.name, detail: task.title });
+        const pending = board.tasks.find((t) => t.id === key);
+        await notifyAdmins(tg, storage, reviewRequestText(pending, member.name, today), reviewButtons(pending), chatId);
+      }
+      const updated = board.tasks.find((t) => t.id === key);
+      if (kind === "s") {
+        await edit(tg, query.message, taskText(updated, today, "⏳ <b>Admin'ga yuborildi.</b> Tasdiqlagach vazifa yopiladi."), taskButtons(updated));
+      } else {
+        const list = taskListMessage(member, board.tasks.filter((t) => t.assigneeId === member.id), today);
+        await edit(tg, query.message, list.text, list.keyboard);
+      }
+      return answer("⏳ Admin tasdiqlashi kutilmoqda");
+    }
+
+    if (task.doneRequestedAt && !isAdmin) return answer("⏳ Admin javobini kuting");
 
     if (task.status !== value) {
       try {
@@ -410,7 +473,6 @@ async function onCallback(tg, storage, query) {
     }
 
     const updated = board.tasks.find((t) => t.id === key);
-    const today = todayISO();
     if (kind === "s") {
       await edit(tg, query.message, taskText(updated, today, value === "done" ? "✅ <b>Bajarildi!</b> Rahmat 👏" : "▶️ <b>Jarayonda</b>"), taskButtons(updated));
     } else if (member) {
@@ -418,6 +480,35 @@ async function onCallback(tg, storage, query) {
       await edit(tg, query.message, list.text, list.keyboard);
     }
     return answer(value === "done" ? "✅ Bajarildi deb belgilandi" : "▶️ Jarayonda deb belgilandi");
+  }
+
+  // Admin: xodim "bajardim" degan vazifani tasdiqlash / qaytarish
+  if (kind === "r") {
+    if (!isAdmin) return answer("Faqat admin uchun");
+    if (!["ok", "no"].includes(value)) return answer("Noto'g'ri buyruq");
+    const task = board.tasks.find((t) => t.id === key);
+    if (!task) {
+      await edit(tg, query.message, `${esc(query.message?.text ?? "")}\n\n🗑 Vazifa o'chirilgan`);
+      return answer("Vazifa topilmadi");
+    }
+    const memberName = board.members.find((m) => m.id === task.assigneeId)?.name ?? "";
+    if (!task.doneRequestedAt) {
+      await edit(tg, query.message, taskText(task, todayISO(), `ℹ️ <b>${esc(memberName)}</b> — bu so'rov allaqachon hal qilingan.`));
+      return answer("Allaqachon hal qilingan");
+    }
+    const ok = value === "ok";
+    board = updateTask(board, task.id, ok ? { status: "done" } : { status: "doing", doneRequested: false });
+    await storage.set("board", board);
+    await addLog(storage, { type: ok ? "tg_confirm" : "tg_return", name: "Admin", detail: `${task.title} — ${memberName}` });
+
+    const updated = board.tasks.find((t) => t.id === key);
+    const today = todayISO();
+    const verdict = ok ? "✅ <b>Tasdiqlandi</b> — vazifa yopildi." : "↩️ <b>Qaytarildi</b> — xodim qayta ishlaydi.";
+    await edit(tg, query.message, taskText(updated, today, `🙋 <b>${esc(memberName)}</b> vazifani bajardim degan edi.\n\n${verdict}`));
+    const memberChat = tgData.members[task.assigneeId]?.chatId;
+    if (memberChat) await send(tg, memberChat, reviewResultText(updated, ok, today), taskButtons(updated));
+    await notifyAdmins(tg, storage, `${ok ? "✅" : "↩️"} Admin <b>${esc(memberName)}</b>ning vazifasini ${ok ? "tasdiqladi" : "qaytardi"}:\n<b>${esc(task.title)}</b>`, null, chatId);
+    return answer(ok ? "✅ Tasdiqlandi" : "↩️ Xodimga qaytarildi");
   }
 
   // Zayavkani qabul qilish / rad etish (faqat admin)
