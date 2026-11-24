@@ -433,8 +433,9 @@ async function onCallback(tg, storage, query) {
     if (!["doing", "done"].includes(value)) return answer("Noto'g'ri buyruq");
     const today = todayISO();
 
-    // Xodim "Bajarildi" bossa — darhol yopilmaydi, admin'ga tasdiqlash uchun boradi
-    if (value === "done" && !isAdmin && task.status !== "done") {
+    // Vazifa egasi "Bajarildi" bossa — darhol yopilmaydi, admin'ga tasdiqlash uchun boradi.
+    // Bitta Telegram ham admin, ham xodim sifatida ulangan bo'lsa ham shunday (so'rov o'ziga ham keladi).
+    if (value === "done" && isOwner && task.status !== "done") {
       if (!task.doneRequestedAt) {
         try {
           board = updateTask(board, task.id, { status: "doing", doneRequested: true });
@@ -444,7 +445,7 @@ async function onCallback(tg, storage, query) {
         await storage.set("board", board);
         await addLog(storage, { type: "tg_review", name: member.name, detail: task.title });
         const pending = board.tasks.find((t) => t.id === key);
-        await notifyAdmins(tg, storage, reviewRequestText(pending, member.name, today), reviewButtons(pending), chatId);
+        await notifyAdmins(tg, storage, reviewRequestText(pending, member.name, today), reviewButtons(pending), isAdmin ? undefined : chatId);
       }
       const updated = board.tasks.find((t) => t.id === key);
       if (kind === "s") {
