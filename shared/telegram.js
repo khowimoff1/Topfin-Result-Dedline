@@ -14,6 +14,7 @@ import { safeEqual } from "./auth.js";
 import { BoardError, updateTask } from "./board.js";
 import { addLog, changeUserStatus, loadBoard, loadTelegram, loadUsers, nowIso } from "./store.js";
 import { motivationOfDay } from "./motivation.js";
+import { monthlyReport, shiftMonth } from "./report.js";
 
 const TIME_ZONE = "Asia/Tashkent";
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -25,6 +26,7 @@ export const BOT_COMMANDS = [
   { command: "vazifalar", description: "Mening faol vazifalarim" },
   { command: "bugun", description: "Bugungi, ertangi va kechikkan vazifalar" },
   { command: "hammasi", description: "Umumiy holat (admin uchun)" },
+  { command: "hisobot", description: "Shu oy natijasi (foizda)" },
   { command: "yordam", description: "Bot haqida" },
 ];
 
@@ -232,7 +234,78 @@ const HELP_TEXT = [
   "/vazifalar — faol vazifalarim",
   "/bugun — bugungi, ertangi va kechikkan vazifalar",
   "/hammasi — umumiy holat (admin uchun)",
+  "/hisobot — shu oy natijasi (necha foiz bajarildi)",
 ].join("\n");
+
+// ---------- Oylik hisobot ----------
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function memberSummary(m) {
+  const parts = [];
+  if (m.onTime) parts.push(`o'z vaqtida ${m.onTime}`);
+  if (m.late) parts.push(`⏰ kechikib ${m.late}`);
+  if (m.missed) parts.push(`❌ bajarilmagan ${m.missed}`);
+  if (m.waiting) parts.push(`⏳ tasdiq kutmoqda ${m.waiting}`);
+  if (m.upcoming) parts.push(`🕓 muddati kelmagan ${m.upcoming}`);
+  return parts.join(" · ");
+}
+
+function teamReportText(report, final) {
+  const { team } = report;
+  const head = `📊 <b>${final ? "Oy yakuni" : "Oylik hisobot"} — ${report.label}</b>`;
+  if (!team.total) return `${head}\n\nBu oyda deadline'i tushgan vazifa yo'q.`;
+  let place = 0;
+  const lines = report.members.map((m) => {
+    if (!m.total) return `▫️ ${esc(m.name)} — bu oyda vazifa yo'q`;
+    const mark = MEDALS[place] ?? `${place + 1}.`;
+    place += 1;
+    return `${mark} <b>${esc(m.name)}</b> — <b>${m.percent}%</b> (${m.done}/${m.total})\n      ${memberSummary(m)}`;
+  });
+  return [
+    head,
+    "",
+    `👥 Jamoa: <b>${team.percent}%</b> bajarildi (${team.done}/${team.total}), o'z vaqtida ${team.onTimePercent}%`,
+    "",
+    lines.join("\n"),
+    "",
+    "<i>Hisobotga deadline'i shu oyga tushgan vazifalar kiradi.</i>",
+  ].join("\n");
+}
+
+function memberReportText(report, m, final) {
+  const head = `📊 <b>${final ? "Oy yakuni" : "Shu oy"} — ${report.label}</b>\n👤 ${esc(m.name)}`;
+  if (!m.total) return `${head}\n\nBu oyda sizga deadline'i tushgan vazifa yo'q.`;
+  const missed = m.tasks.filter((t) => t.result === "missed").map((t) => `   • ${esc(t.title)} (${fmtDate(t.deadline)})`);
+  const cheer =
+    m.percent >= 90 ? "🏆 Ajoyib natija! Rahmat!" : m.percent >= 70 ? "👍 Yaxshi natija!" : "💪 Keyingi oyda yanada yaxshi bo'ladi!";
+  return [
+    `${head}\n`,
+    `✅ Bajarildi: <b>${m.done} / ${m.total}</b> — <b>${m.percent}%</b>`,
+    `   ${memberSummary(m)}`,
+    missed.length ? `\n❌ <b>Bajarilmagan:</b>\n${missed.join("\n")}` : "",
+    final || !m.upcoming ? `\n${cheer}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Oylik hisobotni yuborish: admin'larga — butun jamoa, har bir xodimga — o'z natijasi. */
+export async function sendMonthlyReport(tg, storage, monthKey, { final = false } = {}) {
+  if (!tg) return { sent: 0 };
+  const board = await loadBoard(storage);
+  const { members, admins } = await loadTelegram(storage);
+  const report = monthlyReport(board, monthKey, todayISO());
+  const jobs = [];
+  for (const m of report.members) {
+    const chatId = members[m.id]?.chatId;
+    if (chatId && m.total) jobs.push(send(tg, chatId, memberReportText(report, m, final)));
+  }
+  const teamText = teamReportText(report, final);
+  for (const admin of admins) jobs.push(send(tg, admin.chatId, teamText));
+  const results = await Promise.all(jobs);
+  return { sent: results.filter(Boolean).length };
+}
 
 // ---------- "Bajarildi" ni admin tasdiqlashi ----------
 
@@ -331,7 +404,11 @@ export async function sendDailyReminders(tg, storage) {
   for (const admin of admins) jobs.push(send(tg, admin.chatId, adminText));
 
   const results = await Promise.all(jobs);
-  return { sent: results.filter(Boolean).length };
+  let sent = results.filter(Boolean).length;
+
+  // Har oyning 1-kuni — o'tgan oy yakuni (kim necha foizga yopdi)
+  if (today.endsWith("-01")) sent += (await sendMonthlyReport(tg, storage, shiftMonth(today.slice(0, 7), -1), { final: true })).sent;
+  return { sent };
 }
 
 // ---------- Botga kelgan xabarlar (webhook) ----------
@@ -406,6 +483,21 @@ async function onMessage(tg, storage, message) {
     if (member) parts.push(own ? `👤 <b>Sizning vazifalaringiz:</b>\n\n${own}` : "🎉 Bugun va ertaga muddati tugaydigan vazifangiz yo'q.");
     if (isAdmin) parts.push(all ? `👥 <b>Butun jamoa:</b>\n\n${all}` : "👥 Jamoada bugun/ertaga muddati tugaydigan yoki kechikkan vazifa yo'q.");
     return send(tg, chatId, parts.join("\n\n———\n\n"));
+  }
+
+  if (command === "/hisobot" || command === "/report") {
+    // "/hisobot" — shu oy, "/hisobot otgan" — o'tgan oy
+    const previous = /^o.?tgan$/i.test(payload ?? "");
+    const month = shiftMonth(today.slice(0, 7), previous ? -1 : 0);
+    const report = monthlyReport(board, month, today);
+    const parts = [];
+    if (isAdmin) parts.push(teamReportText(report, previous));
+    else {
+      const own = report.members.find((m) => m.id === member.id);
+      parts.push(memberReportText(report, own, previous));
+    }
+    if (!previous) parts.push("O'tgan oy: /hisobot otgan");
+    return send(tg, chatId, parts.join("\n\n"));
   }
 
   if (command === "/hammasi" || command === "/all") {
@@ -541,6 +633,13 @@ export async function telegramStatus(tg, storage, board, origin) {
   try {
     if (!tgData.botUsername) {
       tgData.botUsername = (await tg.call("getMe")).username;
+      await storage.set("telegram", tgData);
+    }
+    // Yangi buyruq qo'shilgan bo'lsa — bot menyusini yangilaymiz
+    const commandsKey = BOT_COMMANDS.map((c) => c.command).join(",");
+    if (tgData.commandsKey !== commandsKey) {
+      await tg.call("setMyCommands", { commands: BOT_COMMANDS });
+      tgData.commandsKey = commandsKey;
       await storage.set("telegram", tgData);
     }
     const info = await tg.call("getWebhookInfo");

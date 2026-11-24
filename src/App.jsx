@@ -7,6 +7,7 @@ import ListView from "./components/ListView.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import UsersModal from "./components/UsersModal.jsx";
 import TelegramModal from "./components/TelegramModal.jsx";
+import ReportModal from "./components/ReportModal.jsx";
 import { LOGO_URL, daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
 import { toISODate } from "../shared/board.js";
 
@@ -32,6 +33,7 @@ export default function App() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [access, setAccess] = useState({ users: [], log: [] }); // faqat admin uchun
   const [logoutNotice, setLogoutNotice] = useState("");
 
@@ -56,6 +58,7 @@ export default function App() {
     setMembersOpen(false);
     setUsersOpen(false);
     setTelegramOpen(false);
+    setReportOpen(false);
     setAccess({ users: [], log: [] });
     setLogoutNotice(reason);
   }, []);
@@ -197,6 +200,9 @@ export default function App() {
               </span>
             </span>
           )}
+          <button className="btn" onClick={() => setReportOpen(true)}>
+            📊 Hisobot
+          </button>
           {canEdit && (
             <>
               <button className="btn" onClick={() => setUsersOpen(true)}>
@@ -312,6 +318,7 @@ export default function App() {
           onClose={() => setEditing(null)}
         />
       )}
+      {reportOpen && <ReportModal board={board} canEdit={canEdit} onToast={setToast} onClose={() => setReportOpen(false)} />}
       {telegramOpen && canEdit && <TelegramModal onClose={() => setTelegramOpen(false)} onToast={setToast} />}
       {usersOpen && canEdit && (
         <UsersModal

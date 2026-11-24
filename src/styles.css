@@ -280,3 +280,54 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .review-chip { color: var(--soon); font-weight: 600; white-space: nowrap; }
 .notice-review { display: block; width: 100%; text-align: left; cursor: pointer; border: 0; font: inherit; }
 .notice-review:hover { filter: brightness(0.97); }
+
+/* ---------- Oylik hisobot ---------- */
+.report-modal { padding: 12px 20px 20px; }
+.tone-good { color: var(--later); }
+.tone-mid { color: var(--soon); }
+.tone-bad { color: var(--overdue); }
+.tone-bg-good { background: var(--later); }
+.tone-bg-mid { background: #f59e0b; }
+.tone-bg-bad { background: var(--overdue); }
+
+.report-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.month-switch { display: flex; align-items: center; gap: 6px; }
+.month-switch select { font: inherit; font-weight: 600; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
+.report-empty { padding: 40px 0; }
+
+.report-team { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.report-big, .report-num {
+  background: var(--bg, #f6f7fb); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 96px;
+}
+.report-big { min-width: 150px; }
+.report-big b { font-size: 32px; line-height: 1.1; }
+.report-num b { font-size: 22px; line-height: 1.2; }
+.report-big span, .report-num span { font-size: 12px; color: var(--muted); }
+
+.report-list { display: flex; flex-direction: column; gap: 8px; }
+.report-row { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.report-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.report-head:disabled { cursor: default; opacity: 0.7; }
+.report-rank { width: 18px; text-align: center; font-weight: 700; color: var(--muted); }
+.report-name { display: flex; flex-direction: column; min-width: 0; flex: 0 1 260px; }
+.report-name small { font-size: 12px; }
+.report-bar-track { flex: 1; height: 10px; background: #eceef3; border-radius: 999px; overflow: hidden; min-width: 60px; }
+.report-bar-track span { display: block; height: 100%; border-radius: 999px; transition: width 0.3s; }
+.report-percent { font-size: 20px; font-weight: 700; width: 56px; text-align: right; }
+.report-chevron { color: var(--muted); width: 12px; }
+.report-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 64px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f0f1f5; color: var(--text, #1f2330); }
+.chip-onTime { background: var(--later-bg); color: var(--later); }
+.chip-late { background: var(--soon-bg); color: var(--soon); }
+.chip-missed { background: var(--overdue-bg); color: var(--overdue); }
+.report-tasks { list-style: none; margin: 10px 0 0 64px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.report-tasks li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.report-task-title { font-weight: 500; }
+.report-note { margin-top: 14px; }
+@media (max-width: 640px) {
+  .report-name { flex-basis: 140px; }
+  .report-chips, .report-tasks { margin-left: 0; }
+}

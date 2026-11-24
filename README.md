@@ -21,7 +21,11 @@ Jamoa (4 xodim) uchun vazifalar va deadline'lar shabloni.
     Tasdiqlansa — vazifa yopiladi, qaytarilsa — xodimga «qayta ishlang» xabari boradi
   - har kuni soat **9:00** da — kechikkan, bugungi va ertangi vazifalar haqida eslatma (admin'ga — umumiy holat)
   - saytga yangi zayavka kelsa — admin'ga **Qabul qilish / Rad etish** tugmalari bilan xabar
-  - buyruqlar: `/vazifalar`, `/bugun`, `/hammasi` (admin)
+  - har oyning **1-kuni** — o'tgan oy yakuni: admin'ga butun jamoa (kim necha foiz), xodimga o'z natijasi
+  - buyruqlar: `/vazifalar`, `/bugun`, `/hisobot` (shu oy; `/hisobot otgan` — o'tgan oy), `/hammasi` (admin)
+- **📊 Oylik hisobot (svod):** oy tanlanadi, har bir xodim bo'yicha — necha vazifa, necha foiz bajarildi,
+  o'z vaqtida / kechikib / bajarilmagan; reyting, vazifalar ro'yxati, **Excel (CSV)** yuklab olish,
+  admin uchun **Telegramga yuborish**. Hisobotga deadline'i shu oyga tushgan vazifalar kiradi
 - Har bir xodim uchun alohida ustun, bajarilish foizi
 - Deadline'gacha qolgan kun: **qizil** (kechikkan), **to'q sariq** (bugun), **sariq** (1–3 kun), **ko'k** (bir hafta ichida), **yashil**
 - Statistika: faol, muddati o'tgan, 3 kun ichida, bajarilgan

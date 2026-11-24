@@ -86,3 +86,4 @@ export const fetchTelegram = () => request("telegram");
 export const setupTelegram = () => post("telegram/setup", {});
 export const unlinkTelegram = (target) => post("telegram/unlink", target);
 export const sendReminderNow = () => post("telegram/remind", {});
+export const sendMonthlyReport = (month) => post("telegram/report", { month });

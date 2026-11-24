@@ -19,6 +19,7 @@ import {
   notifyAccessRequest,
   notifyTaskChange,
   sendDailyReminders,
+  sendMonthlyReport,
   setupWebhook,
   telegramStatus,
   unlinkTelegram,
@@ -190,6 +191,11 @@ export async function handleApi(req, storage, auth, options = {}) {
         return json(await telegramStatus(tg, storage, board, origin));
       }
       if (method === "POST" && id === "remind") return json(await sendDailyReminders(tg, storage));
+      if (method === "POST" && id === "report") {
+        const month = (await readBody(req))?.month;
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month ?? "")) throw new BoardError("Oy noto'g'ri tanlangan");
+        return json(await sendMonthlyReport(tg, storage, month));
+      }
       return json({ error: "Topilmadi" }, 404);
     }
 

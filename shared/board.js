@@ -77,7 +77,9 @@ function buildTask(input, board, base = {}) {
   const status = STATUSES.includes(src.status) ? src.status : "todo";
   let completedAt = null;
   if (status === "done") {
-    completedAt = base.status === "done" && base.completedAt ? base.completedAt : new Date().toISOString();
+    // Admin keyinroq tasdiqlasa ham — yopilgan vaqt xodim "bajardim" degan payt hisoblanadi
+    completedAt =
+      base.status === "done" && base.completedAt ? base.completedAt : base.doneRequestedAt ?? new Date().toISOString();
   }
 
   // Xodim botda "Bajarildi" bosganda — admin tasdiqlashini kutadi (doneRequestedAt).
