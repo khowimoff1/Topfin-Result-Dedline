@@ -5,12 +5,13 @@
 //  - xodimga yangi vazifa belgilansa / deadline o'zgarsa / vazifa o'tkazilsa yoki bekor qilinsa — xabar
 //  - xabardagi tugmalar: "▶️ Boshladim", "✅ Bajarildi" — saytdagi holat ham o'zgaradi, admin'ga xabar boradi
 //  - /vazifalar, /bugun — xodimning o'z vazifalari; /hammasi — admin uchun umumiy holat
-//  - har kuni ertalab — bugungi, ertangi va kechikkan vazifalar haqida eslatma
+//  - har kuni ertalab — kun gapi (motivatsiya) + bugungi, ertangi va kechikkan vazifalar
 //  - saytga yangi zayavka kelsa — admin'ga "Qabul qilish / Rad etish" tugmalari bilan xabar
 import { createHash, createHmac } from "node:crypto";
 import { safeEqual } from "./auth.js";
 import { BoardError, updateTask } from "./board.js";
 import { addLog, changeUserStatus, loadBoard, loadTelegram, loadUsers, nowIso } from "./store.js";
+import { motivationOfDay } from "./motivation.js";
 
 const TIME_ZONE = "Asia/Tashkent";
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -269,22 +270,28 @@ export async function sendDailyReminders(tg, storage) {
   const board = await loadBoard(storage);
   const { members, admins } = await loadTelegram(storage);
   const today = todayISO();
+  const quote = `💬 <i>${esc(motivationOfDay(today))}</i>`;
   const jobs = [];
 
+  // Har bir xodimga: kun gapi + shoshilinch vazifalari (bo'lmasa — faol vazifalar soni)
   for (const member of board.members) {
     const chatId = members[member.id]?.chatId;
     if (!chatId) continue;
-    const body = dueSoonText(board.tasks.filter((t) => t.assigneeId === member.id), today);
-    if (!body) continue;
-    jobs.push(send(tg, chatId, `☀️ <b>Xayrli tong, ${esc(member.name)}!</b>\n\n${body}\n\nBarcha vazifalar: /vazifalar`));
+    const own = board.tasks.filter((t) => t.assigneeId === member.id);
+    const activeCount = sortActive(own).length;
+    const body =
+      dueSoonText(own, today) ||
+      (activeCount
+        ? `✅ Bugun va ertaga muddati tugaydigan vazifangiz yo'q. Faol vazifalar: ${activeCount} ta.`
+        : "🎉 Hozircha faol vazifangiz yo'q.");
+    jobs.push(send(tg, chatId, `☀️ <b>Xayrli tong, ${esc(member.name)}!</b>\n\n${quote}\n\n${body}\n\nBarcha vazifalar: /vazifalar`));
   }
 
-  if (sortActive(board.tasks).length > 0) {
-    const nameOf = (t) => board.members.find((m) => m.id === t.assigneeId)?.name ?? "";
-    const soon = dueSoonText(board.tasks, today, nameOf);
-    const text = `☀️ <b>Xayrli tong!</b>\n\n${overviewText(board, today)}${soon ? `\n\n${soon}` : ""}`;
-    for (const admin of admins) jobs.push(send(tg, admin.chatId, text));
-  }
+  // Admin'ga: kun gapi + jamoaning umumiy holati
+  const nameOf = (t) => board.members.find((m) => m.id === t.assigneeId)?.name ?? "";
+  const soon = dueSoonText(board.tasks, today, nameOf);
+  const adminText = `☀️ <b>Xayrli tong!</b>\n\n${quote}\n\n${overviewText(board, today)}${soon ? `\n\n${soon}` : ""}`;
+  for (const admin of admins) jobs.push(send(tg, admin.chatId, adminText));
 
   const results = await Promise.all(jobs);
   return { sent: results.filter(Boolean).length };
