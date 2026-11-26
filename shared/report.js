@@ -84,6 +84,24 @@ export function monthlyReport(board, monthKey, today) {
   return { month: monthKey, label: monthLabel(monthKey), members: ranked, team: teamTotals };
 }
 
+/**
+ * So'nggi `count` oy bo'yicha har bir xodimning foizi (eski → yangi).
+ * Natija: { months: ["2026-06", ...], members: [{ id, name, cells: [{ month, total, done, percent } | null] }] }
+ */
+export function trendReport(board, endMonth, count, today) {
+  const months = Array.from({ length: count }, (_, i) => shiftMonth(endMonth, i - count + 1));
+  const reports = months.map((m) => monthlyReport(board, m, today));
+  const cell = (r, id) => {
+    const row = r.members.find((x) => x.id === id);
+    return row?.total ? { month: r.month, total: row.total, done: row.done, percent: row.percent } : null;
+  };
+  return {
+    months,
+    team: reports.map((r) => (r.team.total ? { month: r.month, total: r.team.total, done: r.team.done, percent: r.team.percent } : null)),
+    members: board.members.map((m) => ({ id: m.id, name: m.name, cells: reports.map((r) => cell(r, m.id)) })),
+  };
+}
+
 /** Hisobotda tanlash mumkin bo'lgan oylar (vazifalar deadline'laridan + joriy oy), yangisi birinchi. */
 export function reportMonths(board, today) {
   const set = new Set(board.tasks.map((t) => t.deadline?.slice(0, 7)).filter(Boolean));

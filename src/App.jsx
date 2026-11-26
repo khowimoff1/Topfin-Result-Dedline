@@ -7,7 +7,7 @@ import ListView from "./components/ListView.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import UsersModal from "./components/UsersModal.jsx";
 import TelegramModal from "./components/TelegramModal.jsx";
-import ReportModal from "./components/ReportModal.jsx";
+import ReportPage from "./components/ReportPage.jsx";
 import { LOGO_URL, daysLeft, formatDate, initials, memberColor, sortTasks } from "./utils.js";
 import { toISODate } from "../shared/board.js";
 
@@ -33,7 +33,8 @@ export default function App() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
+  // Bo'lim: "tasks" yoki "report" — manzilda #hisobot bo'lsa hisobot ochiladi (havolani ulashish mumkin)
+  const [page, setPage] = useState(() => (window.location.hash === "#hisobot" ? "report" : "tasks"));
   const [access, setAccess] = useState({ users: [], log: [] }); // faqat admin uchun
   const [logoutNotice, setLogoutNotice] = useState("");
 
@@ -58,7 +59,6 @@ export default function App() {
     setMembersOpen(false);
     setUsersOpen(false);
     setTelegramOpen(false);
-    setReportOpen(false);
     setAccess({ users: [], log: [] });
     setLogoutNotice(reason);
   }, []);
@@ -81,6 +81,19 @@ export default function App() {
   }, [session, refresh]);
 
   useEffect(() => localStorage.setItem("view", view), [view]);
+
+  const goTo = (next) => {
+    setPage(next);
+    window.history.replaceState(null, "", next === "report" ? "#hisobot" : window.location.pathname);
+    window.scrollTo(0, 0);
+  };
+
+  // Brauzerning "orqaga/oldinga" tugmasi yoki havola bilan ochilganda
+  useEffect(() => {
+    const onHash = () => setPage(window.location.hash === "#hisobot" ? "report" : "tasks");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -200,9 +213,6 @@ export default function App() {
               </span>
             </span>
           )}
-          <button className="btn" onClick={() => setReportOpen(true)}>
-            📊 Hisobot
-          </button>
           {canEdit && (
             <>
               <button className="btn" onClick={() => setUsersOpen(true)}>
@@ -227,6 +237,20 @@ export default function App() {
       </header>
 
       {loadError && <div className="notice notice-error">Yangilashda xatolik: {loadError}</div>}
+
+      <nav className="page-tabs">
+        <button className={page === "tasks" ? "active" : ""} onClick={() => goTo("tasks")}>
+          📋 Vazifalar
+        </button>
+        <button className={page === "report" ? "active" : ""} onClick={() => goTo("report")}>
+          📊 Hisobot
+        </button>
+      </nav>
+
+      {page === "report" ? (
+        <ReportPage board={board} canEdit={canEdit} onToast={setToast} />
+      ) : (
+      <>
       {canEdit && stats.review > 0 && filter !== "review" && (
         <button className="notice notice-review" onClick={() => setFilter("review")}>
           ⏳ <b>{stats.review} ta</b> vazifani xodim «bajardim» dedi — tasdig'ingizni kutmoqda. Ko'rish →
@@ -306,6 +330,8 @@ export default function App() {
       ) : (
         <ListView tasks={visibleTasks} members={board.members} canEdit={canEdit} onEdit={(task) => setEditing({ task })} onToggleDone={toggleDone} />
       )}
+      </>
+      )}
 
       {editing && (
         <TaskModal
@@ -318,7 +344,6 @@ export default function App() {
           onClose={() => setEditing(null)}
         />
       )}
-      {reportOpen && <ReportModal board={board} canEdit={canEdit} onToast={setToast} onClose={() => setReportOpen(false)} />}
       {telegramOpen && canEdit && <TelegramModal onClose={() => setTelegramOpen(false)} onToast={setToast} />}
       {usersOpen && canEdit && (
         <UsersModal
